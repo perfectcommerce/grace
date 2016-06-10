@@ -21,7 +21,9 @@ var (
 
 func main() {
 	flag.Parse()
-	gracehttp.Serve(
+	gracehttp.Serve(func() error {
+		return nil
+	},
 		&http.Server{Addr: *address0, Handler: newHandler("Zero  ")},
 		&http.Server{Addr: *address1, Handler: newHandler("First ")},
 		&http.Server{Addr: *address2, Handler: newHandler("Second")},
