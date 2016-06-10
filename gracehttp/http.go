@@ -33,9 +33,10 @@ type app struct {
 	listeners []net.Listener
 	sds       []httpdown.Server
 	errors    chan error
+	predeath  func() error
 }
 
-func newApp(servers []*http.Server) *app {
+func newApp(predeath func() error, servers []*http.Server) *app {
 	return &app{
 		servers:   servers,
 		http:      &httpdown.HTTP{},
@@ -45,7 +46,8 @@ func newApp(servers []*http.Server) *app {
 
 		// 2x num servers for possible Close or Stop errors + 1 for possible
 		// StartProcess error.
-		errors: make(chan error, 1+(len(servers)*2)),
+		errors:   make(chan error, 1+(len(servers)*2)),
+		predeath: predeath,
 	}
 }
 
@@ -86,6 +88,9 @@ func (a *app) wait() {
 }
 
 func (a *app) term(wg *sync.WaitGroup) {
+	if err := a.predeath(); err != nil {
+		a.errors <- err
+	}
 	for _, s := range a.sds {
 		go func(s httpdown.Server) {
 			defer wg.Done()
@@ -120,8 +125,8 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 
 // Serve will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
-func Serve(servers ...*http.Server) error {
-	a := newApp(servers)
+func Serve(predeath func() error, servers ...*http.Server) error {
+	a := newApp(predeath, servers)
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
